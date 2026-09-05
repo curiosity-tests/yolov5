@@ -18,12 +18,12 @@ on:
   workflow_dispatch:
     inputs:
       leg:
-        description: "baseline (uninstrumented) or instrumented (under chalk/curiosity)"
+        description: baseline (uninstrumented) or instrumented (under chalk/curiosity)
         type: choice
         options: [instrumented, baseline]
         default: instrumented
       profile:
-        description: "CrashOverride chalk profile"
+        description: CrashOverride chalk profile
         type: string
         default: curiosity-tests-racecar
       racecar_run:
@@ -89,7 +89,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-14] # macos-latest bug https://github.com/ultralytics/yolov5/pull/9049
+        os: [ubuntu-latest] # macos-latest bug https://github.com/ultralytics/yolov5/pull/9049
         python-version: ["3.x"] # evergreen latest stable Python
         model: [yolov5n]
         include:
@@ -207,7 +207,7 @@ jobs:
           test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
 
       - name: Check for failure and notify
-        if: (needs.Benchmarks.result == 'failure' || needs.Tests.result == 'failure' || needs.Benchmarks.result == 'cancelled' || needs.Tests.result == 'cancelled') && github.repository == 'curiosity-tests/yolov5' && (github.event_name == 'schedule' || github.event_name == 'push') && github.run_attempt == '1'
+        if: (needs.Benchmarks.result == 'failure' || needs.Tests.result == 'failure' || needs.Benchmarks.result == 'cancelled' || needs.Tests.result == 'cancelled') && github.repository == 'ultralytics/yolov5' && (github.event_name == 'schedule' || github.event_name == 'push') && github.run_attempt == '1'
         uses: slackapi/slack-github-action@v4.0.0
         with:
           webhook-type: incoming-webhook
