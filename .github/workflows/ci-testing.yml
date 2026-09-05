@@ -6,6 +6,7 @@ name: YOLOv5 CI
 
 permissions:
   contents: read
+  id-token: write
 
 on:
   push:
@@ -15,6 +16,27 @@ on:
   schedule:
     - cron: "0 0 * * *" # runs at 00:00 UTC every day
   workflow_dispatch:
+    inputs:
+      leg:
+        description: "baseline (uninstrumented) or instrumented (under chalk/curiosity)"
+        type: choice
+        options: [instrumented, baseline]
+        default: instrumented
+      profile:
+        description: "CrashOverride chalk profile"
+        type: string
+        default: curiosity-tests-racecar
+      racecar_run:
+        description: "racecar correlation token, echoed into the run name"
+        type: string
+        default: ""
+
+env:
+  # The one variable that separates the arms: on baseline, action-checkout
+  # skips its Set up Chalk step entirely.
+  CHALK_ON: ${{ github.event_name == 'workflow_dispatch' && inputs.leg != 'baseline' }}
+
+run-name: "YOLOv5 CI ${{ inputs.leg || 'push' }} ${{ inputs.racecar_run }}"
 
 jobs:
   Benchmarks:
@@ -26,7 +48,19 @@ jobs:
         python-version: ["3.11"] # requires python<=3.11
         model: [yolov5n]
     steps:
-      - uses: actions/checkout@v7
+      - name: Checkout code
+        uses: crashappsec/action-checkout@main
+        with:
+          chalk: ${{ env.CHALK_ON }}
+          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+          observables_continue_on_error: false
+          lfs: false
+      - name: Assert instrumentation is live
+        if: env.CHALK_ON == 'true'
+        run: |
+          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
+          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
+
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
@@ -64,7 +98,19 @@ jobs:
             model: yolov5n
             torch: "1.8.0" # min torch version CI https://pypi.org/project/torchvision/
     steps:
-      - uses: actions/checkout@v7
+      - name: Checkout code
+        uses: crashappsec/action-checkout@main
+        with:
+          chalk: ${{ env.CHALK_ON }}
+          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+          observables_continue_on_error: false
+          lfs: false
+      - name: Assert instrumentation is live
+        if: env.CHALK_ON == 'true'
+        run: |
+          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
+          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
+
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
@@ -147,8 +193,21 @@ jobs:
     needs: [Benchmarks, Tests]
     if: always()
     steps:
+      - name: Checkout code
+        uses: crashappsec/action-checkout@main
+        with:
+          chalk: ${{ env.CHALK_ON }}
+          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+          observables_continue_on_error: false
+          lfs: false
+      - name: Assert instrumentation is live
+        if: env.CHALK_ON == 'true'
+        run: |
+          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
+          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
+
       - name: Check for failure and notify
-        if: (needs.Benchmarks.result == 'failure' || needs.Tests.result == 'failure' || needs.Benchmarks.result == 'cancelled' || needs.Tests.result == 'cancelled') && github.repository == 'ultralytics/yolov5' && (github.event_name == 'schedule' || github.event_name == 'push') && github.run_attempt == '1'
+        if: (needs.Benchmarks.result == 'failure' || needs.Tests.result == 'failure' || needs.Benchmarks.result == 'cancelled' || needs.Tests.result == 'cancelled') && github.repository == 'curiosity-tests/yolov5' && (github.event_name == 'schedule' || github.event_name == 'push') && github.run_attempt == '1'
         uses: slackapi/slack-github-action@v4.0.0
         with:
           webhook-type: incoming-webhook
